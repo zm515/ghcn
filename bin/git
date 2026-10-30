@@ -1,0 +1,21 @@
+#!/bin/bash
+# bin/git —— git 包装器(环境由 install-git.sh 装在 .gitenv)
+#
+# 做三件事:
+#   1. 指向仓库内的 conda 环境,不依赖系统 git(系统 /usr/bin/git 常是 Xcode 空壳)
+#   2. 全局配置放在本仓库 .gitconfig,不写 ~/.gitconfig
+#   3. 把 bin/ 前置进 PATH,让 `git push-api` 这类子命令可用
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ ! -x "$WS/.gitenv/bin/git" ]; then
+  echo "错误: 找不到 $WS/.gitenv/bin/git,先运行 ./install-git.sh" >&2
+  exit 127
+fi
+
+export GIT_EXEC_PATH="${GIT_EXEC_PATH:-$WS/.gitenv/libexec/git-core}"
+export GIT_TEMPLATE_DIR="${GIT_TEMPLATE_DIR:-$WS/.gitenv/share/git-core/templates}"
+export GIT_SSL_CAINFO="${GIT_SSL_CAINFO:-$WS/.gitenv/ssl/cacert.pem}"
+export GIT_CONFIG_GLOBAL="${GIT_CONFIG_GLOBAL:-$WS/.gitconfig}"
+export PATH="$WS/bin:$PATH"
+
+exec "$WS/.gitenv/bin/git" "$@"

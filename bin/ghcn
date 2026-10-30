@@ -1,0 +1,95 @@
+#!/bin/bash
+# bin/ghcn —— 环境自检(doctor)
+# 用法: ./bin/ghcn         或  ./bin/ghcn doctor
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export GH_CONFIG_DIR="${GH_CONFIG_DIR:-$WS/.gh-config}"
+export PATH="$WS/bin:$PATH"
+
+ok()   { printf '  \033[32m✓\033[0m %-34s %s\n' "$1" "$2"; }
+bad()  { printf '  \033[31m✗\033[0m %-34s %s\n' "$1" "$2"; }
+warn() { printf '  \033[33m!\033[0m %-34s %s\n' "$1" "$2"; }
+hr()   { printf '%s\n' "────────────────────────────────────────────────────────────────"; }
+
+echo ""
+echo "ghcn doctor — 网络受限环境下的 GitHub 可用性自检"
+hr
+printf '平台: %s %s\n' "$(uname -s)" "$(uname -m)"
+hr
+
+# 1) 网络可达性
+printf '网络\n'
+probe() { # probe <host-url> <label>
+  local code
+  code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 8 "$1" 2>/dev/null) || code="000"
+  if [ "$code" = "000" ]; then bad "$2" "不可达"; else ok "$2" "HTTP $code"; fi
+}
+probe https://api.github.com/rate_limit          "api.github.com (API/认证/推送)"
+probe https://github.com/                        "github.com (网页/git 协议)"
+probe https://release-assets.githubusercontent.com/ "release-assets (下载发行包)"
+
+# 配额:已登录走认证额度(5000/hr),否则走匿名额度(60/hr)——两者差 80 倍,别搞错
+RATE=""
+if [ -x "$WS/bin/gh.bin" ] && "$WS/bin/gh" auth status >/dev/null 2>&1; then
+  RATE=$("$WS/bin/gh" api /rate_limit --jq '"\(.rate.remaining)/\(.rate.limit)(认证)"' 2>/dev/null)
+else
+  LIMITS=$(curl -sS --max-time 8 https://api.github.com/rate_limit 2>/dev/null)
+  if [ -n "$LIMITS" ]; then
+    REM=$(printf '%s' "$LIMITS" | sed -n 's/.*"remaining": *\([0-9]*\).*/\1/p' | head -1)
+    LIM=$(printf '%s' "$LIMITS" | sed -n 's/.*"limit": *\([0-9]*\).*/\1/p' | head -1)
+    [ -n "$REM" ] && RATE="$REM/$LIM(匿名)"
+  fi
+fi
+[ -n "$RATE" ] && printf '    API 配额剩余: %s 次/小时\n' "$RATE"
+
+# 2) 工具
+echo ""
+printf '工具\n'
+if [ -x "$WS/bin/gh.bin" ]; then
+  ok "gh" "$("$WS/bin/gh.bin" --version 2>/dev/null | head -1)"
+else
+  bad "gh" "未安装,运行 ./install.sh"
+fi
+if [ -x "$WS/.gitenv/bin/git" ]; then
+  ok "git" "$("$WS/bin/git" --version 2>/dev/null)"
+else
+  bad "git" "未安装,运行 ./install-git.sh"
+fi
+if [ -x "$WS/bin/git-push-api" ]; then
+  ok "git push-api" "已就绪"
+else
+  bad "git push-api" "缺少 bin/git-push-api"
+fi
+
+# 3) 认证
+echo ""
+printf '认证\n'
+if [ -x "$WS/bin/gh.bin" ]; then
+  if "$WS/bin/gh" auth status >/dev/null 2>&1; then
+    who=$("$WS/bin/gh" api /user --jq .login 2>/dev/null)
+    scopes=$("$WS/bin/gh" auth status 2>/dev/null | sed -n "s/.*Token scopes: //p")
+    ok "已登录" "账号 $who"
+    ok "token 作用域" "${scopes:-未知}"
+    ok "凭据位置" "$GH_CONFIG_DIR ($(stat -f '%Sp' "$GH_CONFIG_DIR" 2>/dev/null || stat -c '%a' "$GH_CONFIG_DIR" 2>/dev/null))"
+  else
+    warn "未登录" "见 README「认证」一节(需要 PAT)"
+  fi
+fi
+
+# 4) git 配置
+echo ""
+printf 'git 配置\n'
+if [ -x "$WS/.gitenv/bin/git" ]; then
+  uname_cfg=$("$WS/bin/git" config --global user.name 2>/dev/null || true)
+  [ -n "$uname_cfg" ] && ok "user.name" "$uname_cfg" || warn "user.name" "未设置"
+  rewrite=$("$WS/bin/git" config --global --get-all 'url.https://gitclone.com/github.com/.insteadOf' 2>/dev/null || true)
+  if [ -n "$rewrite" ]; then
+    ok "clone 镜像改写" "$rewrite"
+  else
+    warn "clone 镜像改写" "未配置(国内网络建议 ./install-git.sh --cn)"
+  fi
+fi
+
+echo ""
+hr
+echo "结论: 如果 api.github.com 可达,即使 github.com 不通,也能建仓库、提交、开 PR。"
+echo ""

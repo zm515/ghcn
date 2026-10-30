@@ -1,0 +1,24 @@
+#!/bin/bash
+# bin/git-push-api —— 通过 GitHub REST API 推送,绕开被墙的 github.com。
+# git 会自动执行 PATH 中的 git-<cmd>,所以 `git push-api` 直接可用。
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# 找 Python 3.8+:优先 $PYTHON,其次 DSH 内置,最后常见路径
+# (注意: 有些机器上 /usr/bin/python3 是 Xcode 空壳,跑起来会弹安装框,所以不用 PATH 里的)
+PY="${PYTHON:-}"
+if [ -z "$PY" ] || [ ! -x "$PY" ]; then
+  for c in \
+    "$HOME/.dsh/dsh-runtimes/dsh-primary-runtime/dependencies/python/bin/python3" \
+    "$HOME"/.dsh/dsh-runtimes/*/dependencies/python/bin/python3 \
+    /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3.12 /usr/bin/python3.11; do
+    if [ -x "$c" ] && "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' 2>/dev/null; then
+      PY="$c"; break
+    fi
+  done
+fi
+[ -n "$PY" ] || { echo "错误: 找不到 Python 3.8+(可用 PYTHON=/path/to/python3 指定)" >&2; exit 127; }
+
+export GH_CONFIG_DIR="${GH_CONFIG_DIR:-$WS/.gh-config}"
+export PATH="$WS/bin:$PATH"
+
+exec "$PY" "$WS/tools/api-push/git-push-api.py" "$@"

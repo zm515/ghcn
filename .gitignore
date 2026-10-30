@@ -1,0 +1,11 @@
+# 本地安装产物(脚本可重建,不入库)
+# 注意: 不加结尾斜杠,才能同时排除符号链接
+.gitenv
+.mamba
+.gh-config
+.gitconfig
+bin/gh.bin
+tools/micromamba
+*.log
+.DS_Store
+__pycache__/

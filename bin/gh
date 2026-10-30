@@ -1,0 +1,15 @@
+#!/bin/bash
+# bin/gh —— GitHub CLI 包装器(gh.bin 由 install.sh 下载)
+WS="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ ! -x "$WS/bin/gh.bin" ]; then
+  echo "错误: 找不到 $WS/bin/gh.bin,先运行 ./install.sh" >&2
+  exit 127
+fi
+
+export GH_CONFIG_DIR="${GH_CONFIG_DIR:-$WS/.gh-config}"
+# 前置工作区 bin:让 gh 内部调用 `git` 时命中本仓库的 git 包装器,
+# 而不是没有 Xcode 工具链时的系统空壳 /usr/bin/git
+export PATH="$WS/bin:$PATH"
+
+exec "$WS/bin/gh.bin" "$@"
