@@ -148,6 +148,7 @@ git push-api -R owner/repo            # 覆盖仓库
 | 可执行位 `100755` | 保留 |
 | 子目录 | 正确建为 tree 对象 |
 | 新分支 `--from main` | 父提交正确指向 main tip |
+| **推送到空仓库** | 自动用 Contents API 引导首个提交,最终仍只留 1 个根提交 |
 | blob 完整性 | 上传后校验 API 返回 sha == 本地 sha,不一致直接报错 |
 
 **代价(必须知道)**:
@@ -156,6 +157,8 @@ git push-api -R owner/repo            # 覆盖仓库
 - 本地提交历史**不会**同步,每次推送合成一个 commit
 - 受 GitHub API 速率限制(5000 次/小时);单文件 100MB 上限
 - submodule 会被跳过
+- 空仓库无法直接建 blob(API 返回 409),需先用 Contents API 造一个提交;
+  本工具已自动处理,并把临时提交替换成你自己的根提交
 
 ## 六、目录结构
 
